@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBS Studio Space Overlay & Control Hub</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,600;0,800;0,900;1,400&family=Orbitron:wght@500;700;900&display=swap">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        orbitron: ['Orbitron', 'sans-serif'],
+                        sans: ['Montserrat', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            cyan: '#00f0ff',
+                            magenta: '#ff0055',
+                            gold: '#ffb703',
+                            dark: '#030712'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* ESTILOS DE ANIMAÇÃO E GLOW DO OVERLAY */
+        .neon-glow-cyan {
+            text-shadow: 0 0 8px rgba(0, 240, 255, 0.8), 0 0 20px rgba(0, 240, 255, 0.5);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.3), inset 0 0 15px rgba(0, 240, 255, 0.15);
+        }
+
+        .neon-glow-red {
+            text-shadow: 0 0 8px rgba(255, 0, 85, 0.8), 0 0 20px rgba(255, 0, 85, 0.5);
+            box-shadow: 0 0 18px rgba(255, 0, 85, 0.4);
+        }
+
+        /* Animação do Indicador AO VIVO */
+        @keyframes pulseFade {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.25;
+                transform: scale(0.95);
+            }
+        }
+
+        .live-pulse {
+            animation: pulseFade 2.2s infinite ease-in-out;
+        }
+
+        @keyframes dotBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.1; }
+        }
+
+        .red-dot-blink {
+            animation: dotBlink 1s infinite ease-in-out;
+        }
+
+        /* Slide-in & Slide-out para Alertas POPUP */
+        .popup-card {
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.5s ease;
+            transform: translateX(130%);
+            opacity: 0;
+        }
+
+        .popup-card.active {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        /* Marquee / Texto Rotativo Ajustável */
+        .marquee-container {
+            width: 100%;
+            overflow: hidden;
+            white-space: nowrap;
+            position: relative;
+        }
+
+        .marquee-content {
+            display: inline-block;
+            will-change: transform;
+            animation: marqueeAnim linear infinite;
+        }
+
+        @keyframes marqueeAnim {
+            0% { transform: translateX(100vw); }
+            100% { transform: translateX(-100%); }
+        }
+
+        /* Animação da Logo */
+        @keyframes logoFloat {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-3px) rotate(0.8deg); }
+        }
+
+        .logo-container {
+            animation: logoFloat 4s ease-in-out infinite;
+        }
+
+        /* Custom Scrollbars no Painel */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #00f0ff;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #38bdf8;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col overflow-x-hidden font-sans antialiased">
+
+    <!-- BARRA NAVEGAÇÃO / SWITCHER DE MODO (TOPO) -->
+    <header id="topNav" class="bg-slate-900/90 backdrop-blur-md border-b border-cyan-500/30 sticky top-0 z-50 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+            
+            <!-- Marca & Título -->
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-[0_0_12px_rgba(0,240,255,0.4)]">
+                    <i class="fa-solid fa-satellite-dish text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-orbitron font-bold text-sm sm:text-base text-cyan-400 tracking-wide flex items-center gap-2">
+                        OBS CONTROL HUB <span class="bg-cyan-950 text-cyan-300 border border-cyan-500/40 text-[10px] px-2 py-0.5 rounded-full font-mono">v2.5</span>
+                    </h1>
+                    <p class="text-[11px] text-slate-400">Sistema de Gerenciamento & Overlay para Transmissão</p>
+                </div>
+            </div>
+
+            <!-- Botões de Troca de Modo -->
+            <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+                <button id="btnNavPanel" onclick="switchView('control')" class="flex items-center space-x-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 bg-cyan-500 text-slate-950 shadow-md">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Painel de Controle</span>
+                </button>
+                <button id="btnNavOverlay" onclick="switchView('overlay')" class="flex items-center space-x-2 px-4 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200">
+                    <i class="fa-solid fa-display"></i>
+                    <span>Visualização do Overlay</span>
+                </button>
+            </div>
+
+            <!-- Copiar Link / OBS Helper -->
+            <div class="hidden md:flex items-center space-x-2">
+                <button onclick="copyOverlayURL()" class="bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-2">
+                    <i class="fa-solid fa-link"></i>
+                    <span>Copiar URL para OBS</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTAINER DAS PÁGINAS -->
+    <main class="flex-1 relative w-full h-full overflow-hidden">
+
+        <!-- ================================================================= -->
+        <!-- PÁGINA 1: PAINEL DE CONTROLE (CONTROL DASHBOARD)                   -->
+        <!-- ================================================================= -->
+        <section id="viewControl" class="w-full h-full p-4 sm:p-6 overflow-y-auto max-w-7xl mx-auto space-y-6">
+            
+            <!-- ALERT NOTIFICATION BANNER -->
+            <div id="toastNotification" class="hidden fixed bottom-6 right-6 z-50 bg-cyan-950 border border-cyan-400 text-cyan-200 px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 transition-all">
+                <i class="fa-solid fa-circle-check text-cyan-400 text-lg"></i>
+                <span id="toastText" class="text-sm font-semibold">Alterações sincronizadas com o Overlay!</span>
+            </div>
+
+            <!-- TOP ROW: STATUS & QUICK ACTIONS -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- STATUS DE SINCRONIZAÇÃO DA LIVE -->
+                <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between space-y-4">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <span class="text-xs uppercase font-mono tracking-wider text-slate-400 block mb-1">Status da Conexão</span>
+                            <h3 class="font-orbitron text-lg font-bold text-white flex items-center gap-2">
+                                Sync OBS Studio 
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
+                            </h3>
+                        </div>
+                        <span class="bg-emerald-950 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase">
+                            Canal Ativo
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400 leading-relaxed">
+                        Todas as edições feitas neste painel são transmitidas em <b>tempo real</b> para o Overlay, seja nesta aba, em outra janela do navegador ou na Fonte de Navegador dentro do OBS Studio.
+                    </p>
+                    <div class="pt-2 border-t border-slate-800 flex items-center justify-between">
+                        <button onclick="triggerNow()" class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-xs shadow-lg transition active:scale-95 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-bolt text-sm"></i>
+                            Disparar Alertas CTA Agora
+                        </button>
+                    </div>
+                </div>
+
+                <!-- PREVIEW EM TEMPO REAL (MINI-OVERLAY IFRAME / LIVE RENDER) -->
+                <div class="lg:col-span-2 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col space-y-3">
+                    <div class="flex justify-between items-center px-1">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-tv text-cyan-400 text-xs"></i>
+                            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider font-orbitron">Preview em Tempo Real (Live Stream)</h3>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-[10px] text-slate-400 font-mono">1920x1080 (Scaling)</span>
+                            <button onclick="switchView('overlay')" class="text-xs text-cyan-400 hover:text-cyan-300 font-semibold underline">
+                                Tela Cheia <i class="fa-solid fa-expand text-[10px]"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Frame de Preview Embutido -->
+                    <div class="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-800 shadow-inner group">
+                        <iframe id="previewIframe" src="?mode=overlay" class="w-full h-full border-0 pointer-events-none"></iframe>
+                        <div class="absolute inset-0 bg-transparent group-hover:border-2 border-cyan-500/50 rounded-xl transition pointer-events-none"></div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- MIDDLE ROW: FORMULÁRIOS DE CONFIGURAÇÃO -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                <!-- SEÇÃO 1: MARCA & TEXTOS DO HEADER -->
+                <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+                    <div class="flex items-center space-x-3 border-b border-slate-800 pb-3">
+                        <div class="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                            <i class="fa-solid fa-id-card"></i>
+                        </div>
+                        <h2 class="font-orbitron font-bold text-sm text-cyan-400 uppercase tracking-wide">Identidade do Canal & Header</h2>
+                    </div>
+
+                    <!-- Logo Upload ou URL -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-semibold text-slate-300">Logotipo do Canal</label>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                                <img id="logoPreviewImg" src="" alt="Logo" class="w-full h-full object-cover hidden">
+                                <i id="logoFallbackIcon" class="fa-solid fa-rocket text-cyan-400 text-xl"></i>
+                            </div>
+                            <div class="flex-1 space-y-1.5">
+                                <input type="text" id="inputLogoUrl" oninput="updateConfig()" placeholder="Cole o URL da imagem da Logo..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:border-cyan-400 outline-none">
+                                <div class="flex items-center justify-between text-[11px] text-slate-400">
+                                    <span>Ou envie do seu computador:</span>
+                                    <label for="inputLogoFile" class="text-cyan-400 hover:underline cursor-pointer font-semibold">
+                                        <i class="fa-solid fa-upload"></i> Escolher Arquivo
+                                    </label>
+                                    <input type="file" id="inputLogoFile" accept="image/*" onchange="handleLogoUpload(event)" class="hidden">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Nome do Canal & Subtítulo -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Nome Principal do Canal</label>
+                            <input type="text" id="inputChannelName" oninput="updateConfig()" value="MEU CANAL" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-cyan-400 outline-none font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Subtítulo / Tagline</label>
+                            <input type="text" id="inputChannelSub" oninput="updateConfig()" value="TRANSMISSÃO OFICIAL" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-300 focus:border-cyan-400 outline-none">
+                        </div>
+                    </div>
+
+                    <!-- Texto do Selo Ao Vivo -->
+                    <div class="pt-2">
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Texto da Badge 'Ao Vivo' (Topo Direito)</label>
+                        <input type="text" id="inputLiveBadgeText" oninput="updateConfig()" value="AO VIVO" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-red-400 font-bold focus:border-cyan-400 outline-none uppercase">
+                    </div>
+                </div>
+
+                <!-- SEÇÃO 2: LOWER THIRD & BARRA CONTINUA (MARQUEE) -->
+                <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+                    <div class="flex items-center space-x-3 border-b border-slate-800 pb-3">
+                        <div class="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                            <i class="fa-solid fa-scroll"></i>
+                        </div>
+                        <h2 class="font-orbitron font-bold text-sm text-cyan-400 uppercase tracking-wide">Rodapé (Lower Third) & Marquee</h2>
+                    </div>
+
+                    <!-- Texto da Legenda Superior (Chapeu) -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Texto do Cartão de Notícias (Lower Third Top)</label>
+                        <input type="text" id="inputLowerThird" oninput="updateConfig()" value="Não se esqueça de se inscrever no canal" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-cyan-400 outline-none">
+                    </div>
+
+                    <!-- Texto Rotativo Infinito (Marquee) -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Texto Rotativo Contínuo (Barra #000000)</label>
+                        <textarea id="inputMarqueeText" oninput="updateConfig()" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-200 focus:border-cyan-400 outline-none resize-none">Se inscreva no canal, não esqueça de deixar o seu like e ativar o sininho para receber nossas notificações.</textarea>
+                    </div>
+
+                    <!-- Velocidade do Marquee -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-xs font-semibold text-slate-300">Velocidade da Barra Rotativa</label>
+                            <span id="labelMarqueeSpeed" class="text-xs font-mono text-cyan-400 font-bold">22s</span>
+                        </div>
+                        <input type="range" id="inputMarqueeSpeed" min="10" max="45" step="1" value="22" oninput="updateConfig()" class="w-full accent-cyan-400 cursor-pointer">
+                        <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+                            <span>Rápido (10s)</span>
+                            <span>Lento (45s)</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- BOTTOM ROW: EDITOR DE ALERTAS POPUPS (CTAS) & AMBIENTE ESPACIAL -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- EDITOR DE CTAS / POPUPS (2 COLS) -->
+                <div class="lg:col-span-2 bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+                    <div class="flex flex-wrap items-center justify-between border-b border-slate-800 pb-3 gap-2">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                                <i class="fa-solid fa-bullhorn"></i>
+                            </div>
+                            <h2 class="font-orbitron font-bold text-sm text-cyan-400 uppercase tracking-wide">Pop-ups e Alertas Automáticos (CTAs)</h2>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <label class="text-xs text-slate-400">Frequência:</label>
+                            <select id="selectTimerInterval" onchange="updateConfig()" class="bg-slate-950 border border-slate-800 text-cyan-300 text-xs rounded-lg px-2.5 py-1 focus:border-cyan-400 outline-none font-bold">
+                                <option value="1800000" selected>A cada 30 Minutos (Padrão)</option>
+                                <option value="15000">A cada 15 Segundos (Modo Teste)</option>
+                                <option value="300000">A cada 5 Minutos</option>
+                                <option value="600000">A cada 10 Minutos</option>
+                                <option value="3600000">A cada 1 Hora</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Lista de CTAs Editáveis -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        
+                        <!-- CTA 1: INSCRICAO -->
+                        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2">
+                            <div class="flex justify-between items-center border-b border-slate-800/80 pb-2">
+                                <span class="text-xs font-bold text-red-400 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-user-plus"></i> Inscreva-se
+                                </span>
+                                <input type="checkbox" id="checkCtaSubscribe" checked onchange="updateConfig()" class="w-4 h-4 accent-cyan-400 rounded cursor-pointer">
+                            </div>
+                            <input type="text" id="inputCtaSubscribeTitle" oninput="updateConfig()" value="INSCREVA-SE" class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-white font-bold focus:border-cyan-400 outline-none">
+                            <input type="text" id="inputCtaSubscribeSub" oninput="updateConfig()" value="Faça parte da nossa comunidade!" class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:border-cyan-400 outline-none">
+                        </div>
+
+                        <!-- CTA 2: SININHO -->
+                        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2">
+                            <div class="flex justify-between items-center border-b border-slate-800/80 pb-2">
+                                <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-bell"></i> Sininho
+                                </span>
+                                <input type="checkbox" id="checkCtaBell" checked onchange="updateConfig()" class="w-4 h-4 accent-cyan-400 rounded cursor-pointer">
+                            </div>
+                            <input type="text" id="inputCtaBellTitle" oninput="updateConfig()" value="ATIVE O SININHO" class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-white font-bold focus:border-cyan-400 outline-none">
+                            <input type="text" id="inputCtaBellSub" oninput="updateConfig()" value="Receba notificações de novas lives!" class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:border-cyan-400 outline-none">
+                        </div>
+
+                        <!-- CTA 3: COMENTARIO -->
+                        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2">
+                            <div class="flex justify-between items-center border-b border-slate-800/80 pb-2">
+                                <span class="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-comments"></i> Comentário
+                                </span>
+                                <input type="checkbox" id="checkCtaComment" checked onchange="updateConfig()" class="w-4 h-4 accent-cyan-400 rounded cursor-pointer">
+                            </div>
+                            <input type="text" id="inputCtaCommentTitle" oninput="updateConfig()" value="DEIXE SEU COMENTÁRIO" class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-white font-bold focus:border-cyan-400 outline-none">
+                            <input type="text" id="inputCtaCommentSub" oninput="updateConfig()" value="Participe ativamente do nosso chat!" class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:border-cyan-400 outline-none">
+                        </div>
+
+                        <!-- CTA 4: LIKE -->
+                        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2">
+                            <div class="flex justify-between items-center border-b border-slate-800/80 pb-2">
+                                <span class="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-thumbs-up"></i> Deixar Like
+                                </span>
+                                <input type="checkbox" id="checkCtaLike" checked onchange="updateConfig()" class="w-4 h-4 accent-cyan-400 rounded cursor-pointer">
+                            </div>
+                            <input type="text" id="inputCtaLikeTitle" oninput="updateConfig()" value="DEIXE O SEU LIKE" class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-white font-bold focus:border-cyan-400 outline-none">
+                            <input type="text" id="inputCtaLikeSub" oninput="updateConfig()" value="Fortaleça a transmissão com seu gostei!" class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:border-cyan-400 outline-none">
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- CONFIGURAÇÃO DO ESPAÇO SIDERAL & AJUDA DO OBS -->
+                <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-5 shadow-xl flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center space-x-3 border-b border-slate-800 pb-3 mb-4">
+                            <div class="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                                <i class="fa-solid fa-meteor"></i>
+                            </div>
+                            <h2 class="font-orbitron font-bold text-sm text-cyan-400 uppercase tracking-wide">Espaço Sideral 3D</h2>
+                        </div>
+
+                        <!-- Velocidade das Estrelas -->
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center">
+                                <label class="text-xs font-semibold text-slate-300">Velocidade da Viagem (Warp Speed)</label>
+                                <span id="labelSpaceSpeed" class="text-xs font-mono text-cyan-400 font-bold">2.5</span>
+                            </div>
+                            <input type="range" id="inputSpaceSpeed" min="0.5" max="10" step="0.5" value="2.5" oninput="updateConfig()" class="w-full accent-cyan-400 cursor-pointer">
+                        </div>
+
+                        <!-- Cor Primária do Glow -->
+                        <div class="pt-4 space-y-2">
+                            <label class="block text-xs font-semibold text-slate-300">Tom Neón de Destaque</label>
+                            <div class="flex items-center space-x-3">
+                                <input type="color" id="inputAccentColor" value="#00f0ff" onchange="updateConfig()" class="w-10 h-10 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer p-0.5">
+                                <span id="labelAccentColor" class="text-xs font-mono text-slate-300 uppercase">#00f0ff</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GUIA DE INTEGRAÇÃO COM OBS STUDIO -->
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2">
+                        <h4 class="text-xs font-bold text-cyan-400 flex items-center gap-1.5 font-orbitron">
+                            <i class="fa-solid fa-circle-info"></i> Como adicionar no OBS Studio
+                        </h4>
+                        <ol class="text-[11px] text-slate-400 space-y-1 list-decimal list-inside leading-relaxed">
+                            <li>Clique no botão <b>"Copiar URL para OBS"</b> no topo.</li>
+                            <li>No OBS Studio, adicione uma fonte de <b>Navegador (Browser)</b>.</li>
+                            <li>Cole o URL copiado no campo de URL.</li>
+                            <li>Defina a resolução para <b>1920 x 1080</b> e confirme.</li>
+                        </ol>
+                    </div>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================================================================= -->
+        <!-- PÁGINA 2: VISUALIZAÇÃO DO OVERLAY (LIVE OVERLAY VIEW)              -->
+        <!-- ================================================================= -->
+        <section id="viewOverlay" class="hidden absolute inset-0 w-full h-full overflow-hidden bg-black select-none">
+            
+            <!-- CANVAS DO ESPAÇO SIDERAL 3D / STARFIELD WARP -->
+            <canvas id="spaceCanvas" class="absolute top-0 left-0 w-full h-full z-0 pointer-events-none"></canvas>
+
+            <!-- CAMADA DE CONTEÚDO OVERLAY (1920x1080 SCALED) -->
+            <div id="overlayContainer" class="relative z-10 w-full h-full flex flex-col justify-between p-8 pointer-events-none">
+
+                <!-- TOPO: LOGO (ESQUERDA) & BADGE AO VIVO (DIREITA) -->
+                <div class="flex justify-between items-start w-full">
+                    
+                    <!-- LOGO DO CANAL -->
+                    <div id="overlayLogoBox" class="logo-container flex items-center space-x-4 bg-black/70 backdrop-blur-md px-5 py-3 rounded-2xl border border-cyan-500/40 neon-glow-cyan">
+                        <div class="relative w-12 h-12 flex items-center justify-center bg-gradient-to-tr from-cyan-600 to-blue-600 rounded-xl shadow-lg overflow-hidden shrink-0">
+                            <img id="overlayLogoImg" src="" alt="Logo" class="w-full h-full object-cover hidden">
+                            <i id="overlayLogoIcon" class="fa-solid fa-rocket text-2xl text-white"></i>
+                            <div class="absolute -top-1 -right-1 w-3 h-3 bg-cyan-400 rounded-full animate-ping"></div>
+                        </div>
+                        <div>
+                            <h1 id="overlayChannelName" class="font-orbitron font-extrabold text-2xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-white to-blue-400">
+                                MEU CANAL
+                            </h1>
+                            <p id="overlayChannelSub" class="text-xs font-bold text-cyan-200 tracking-widest uppercase">TRANSMISSÃO OFICIAL</p>
+                        </div>
+                    </div>
+
+                    <!-- BADGE AO VIVO -->
+                    <div class="live-pulse flex items-center space-x-3 bg-black/80 backdrop-blur-md border border-red-500/60 px-6 py-2.5 rounded-full neon-glow-red">
+                        <span class="w-3.5 h-3.5 rounded-full bg-red-600 red-dot-blink border-2 border-white/80 shadow-[0_0_12px_#ff0055]"></span>
+                        <span id="overlayLiveBadge" class="font-orbitron font-black text-xl tracking-widest text-red-500 uppercase">
+                            AO VIVO
+                        </span>
+                    </div>
+
+                </div>
+
+                <!-- CENTRO DIREITA: CARDS POPUPS ANIMADOS (CTAS) -->
+                <div class="absolute right-8 top-1/3 flex flex-col space-y-4 items-end pointer-events-auto">
+                    
+                    <!-- POPUP: INSCREVA-SE -->
+                    <div id="card-subscribe" class="popup-card flex items-center space-x-4 bg-gradient-to-r from-slate-950/95 via-red-950/90 to-red-900/90 backdrop-blur-xl border-l-4 border-red-500 border-y border-r border-red-500/30 p-4 rounded-2xl shadow-2xl min-w-[380px]">
+                        <div class="w-14 h-14 bg-red-600/30 border border-red-500 rounded-xl flex items-center justify-center text-red-400 text-2xl shadow-[0_0_20px_rgba(239,68,68,0.5)] shrink-0">
+                            <i class="fa-solid fa-user-plus"></i>
+                        </div>
+                        <div>
+                            <h3 id="overlayCtaSubscribeTitle" class="font-orbitron font-extrabold text-lg text-white">INSCREVA-SE</h3>
+                            <p id="overlayCtaSubscribeSub" class="text-xs text-slate-300 font-medium">Faça parte da nossa comunidade!</p>
+                        </div>
+                    </div>
+
+                    <!-- POPUP: SININHO -->
+                    <div id="card-bell" class="popup-card flex items-center space-x-4 bg-gradient-to-r from-slate-950/95 via-amber-950/90 to-amber-900/90 backdrop-blur-xl border-l-4 border-amber-500 border-y border-r border-amber-500/30 p-4 rounded-2xl shadow-2xl min-w-[380px]">
+                        <div class="w-14 h-14 bg-amber-600/30 border border-amber-500 rounded-xl flex items-center justify-center text-amber-400 text-2xl shadow-[0_0_20px_rgba(245,158,11,0.5)] shrink-0">
+                            <i class="fa-solid fa-bell animate-bounce"></i>
+                        </div>
+                        <div>
+                            <h3 id="overlayCtaBellTitle" class="font-orbitron font-extrabold text-lg text-white">ATIVE O SININHO</h3>
+                            <p id="overlayCtaBellSub" class="text-xs text-slate-300 font-medium">Receba notificações de novas lives!</p>
+                        </div>
+                    </div>
+
+                    <!-- POPUP: COMENTÁRIO -->
+                    <div id="card-comment" class="popup-card flex items-center space-x-4 bg-gradient-to-r from-slate-950/95 via-cyan-950/90 to-cyan-900/90 backdrop-blur-xl border-l-4 border-cyan-500 border-y border-r border-cyan-500/30 p-4 rounded-2xl shadow-2xl min-w-[380px]">
+                        <div class="w-14 h-14 bg-cyan-600/30 border border-cyan-500 rounded-xl flex items-center justify-center text-cyan-400 text-2xl shadow-[0_0_20px_rgba(6,182,212,0.5)] shrink-0">
+                            <i class="fa-solid fa-comments"></i>
+                        </div>
+                        <div>
+                            <h3 id="overlayCtaCommentTitle" class="font-orbitron font-extrabold text-lg text-white">DEIXE SEU COMENTÁRIO</h3>
+                            <p id="overlayCtaCommentSub" class="text-xs text-slate-300 font-medium">Participe ativamente do nosso chat!</p>
+                        </div>
+                    </div>
+
+                    <!-- POPUP: LIKE -->
+                    <div id="card-like" class="popup-card flex items-center space-x-4 bg-gradient-to-r from-slate-950/95 via-blue-950/90 to-blue-900/90 backdrop-blur-xl border-l-4 border-blue-500 border-y border-r border-blue-500/30 p-4 rounded-2xl shadow-2xl min-w-[380px]">
+                        <div class="w-14 h-14 bg-blue-600/30 border border-blue-500 rounded-xl flex items-center justify-center text-blue-400 text-2xl shadow-[0_0_20px_rgba(59,130,246,0.5)] shrink-0">
+                            <i class="fa-solid fa-thumbs-up"></i>
+                        </div>
+                        <div>
+                            <h3 id="overlayCtaLikeTitle" class="font-orbitron font-extrabold text-lg text-white">DEIXE O SEU LIKE</h3>
+                            <p id="overlayCtaLikeSub" class="text-xs text-slate-300 font-medium">Fortaleça a transmissão com seu gostei!</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- RODAPÉ: LOWER THIRD & MARQUEE CONTINUO -->
+                <div class="w-full flex flex-col space-y-2 -mx-8 -mb-8 pointer-events-auto">
+                    
+                    <!-- CARTÃO LEGENDA (LOWER THIRD) -->
+                    <div class="self-start ml-8 flex items-center space-x-3 bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 px-6 py-2 rounded-t-xl shadow-2xl border-t border-x border-white/20">
+                        <i class="fa-solid fa-circle-info text-white text-base animate-pulse"></i>
+                        <span id="overlayLowerThird" class="font-bold text-sm tracking-wide text-white uppercase drop-shadow">
+                            Não se esqueça de se inscrever no canal
+                        </span>
+                    </div>
+
+                    <!-- BARRA CONTINUA ROTATIVA (MARQUEE 100% W #000000 / #FFFFFF) -->
+                    <div class="w-screen bg-[#000000] border-t-2 border-cyan-500/70 py-3 shadow-[0_-10px_30px_rgba(0,0,0,0.95)] overflow-hidden">
+                        <div class="marquee-container">
+                            <div id="overlayMarquee" class="marquee-content font-orbitron font-bold text-lg text-[#ffffff] tracking-wider">
+                                Se inscreva no canal, não esqueça de deixar o seu like e ativar o sininho para receber nossas notificações. &nbsp;&nbsp;&nbsp;&nbsp;★&nbsp;&nbsp;&nbsp;&nbsp; Se inscreva no canal, não esqueça de deixar o seu like e ativar o sininho para receber nossas notificações.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- SCRIPT DE LÓGICA E SINCRONIZAÇÃO VIA BROADCASTCHANNEL -->
+    <script>
+        /* ===================================================================
+           1. ESTADO GLOBAL & BROADCAST CHANNEL API (SINCRONIZAÇÃO EM TEMPO REAL)
+           =================================================================== */
+        
+        // Nome do canal de sincronização entre janelas/OBS
+        const SYNC_CHANNEL_NAME = 'obs_space_overlay_sync';
+        const broadcastChannel = new BroadcastChannel(SYNC_CHANNEL_NAME);
+
+        // Estado padrão das configurações do Overlay
+        const defaultConfig = {
+            logoUrl: '',
+            channelName: 'MEU CANAL',
+            channelSub: 'TRANSMISSÃO OFICIAL',
+            liveBadgeText: 'AO VIVO',
+            lowerThirdText: 'Não se esqueça de se inscrever no canal',
+            marqueeText: 'Se inscreva no canal, não esqueça de deixar o seu like e ativar o sininho para receber nossas notificações.',
+            marqueeSpeed: 22, // segundos
+            spaceSpeed: 2.5,
+            accentColor: '#00f0ff',
+            timerInterval: 1800000, // 30 Minutos em ms
+            ctas: {
+                subscribe: { enabled: true, title: 'INSCREVA-SE', sub: 'Faça parte da nossa comunidade!' },
+                bell: { enabled: true, title: 'ATIVE O SININHO', sub: 'Receba notificações de novas lives!' },
+                comment: { enabled: true, title: 'DEIXE SEU COMENTÁRIO', sub: 'Participe ativamente do nosso chat!' },
+                like: { enabled: true, title: 'DEIXE O SEU LIKE', sub: 'Fortaleça a transmissão com seu gostei!' }
+            }
+        };
+
+        let currentConfig = { ...defaultConfig };
+
+        // Carregar configurações salvas no localStorage
+        function loadStoredConfig() {
+            try {
+                const saved = localStorage.getItem('obs_space_overlay_config');
+                if (saved) {
+                    currentConfig = JSON.parse(saved);
+                }
+            } catch (e) {
+                console.error('Erro ao ler localStorage', e);
+            }
+        }
+
+        // Salvar e Transmitir alterações para todas as abas/janelas do OBS
+        function saveAndBroadcastConfig() {
+            try {
+                localStorage.setItem('obs_space_overlay_config', JSON.stringify(currentConfig));
+            } catch (e) {
+                console.error('Erro ao salvar no localStorage', e);
+            }
+            broadcastChannel.postMessage({ type: 'UPDATE_CONFIG', config: currentConfig });
+            showToast();
+        }
+
+        /* ===================================================================
+           2. GERENCIAMENTO DE NAVEGAÇÃO / MODOS (DASHBOARD vs OVERLAY)
+           =================================================================== */
+        let currentMode = 'control'; // 'control' ou 'overlay'
+
+        function initModeFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const mode = urlParams.get('mode');
+            
+            if (mode === 'overlay') {
+                switchView('overlay', false);
+            } else {
+                switchView('control', false);
+            }
+        }
+
+        function switchView(mode, updateHistory = true) {
+            currentMode = mode;
+            const navHeader = document.getElementById('topNav');
+            const viewControl = document.getElementById('viewControl');
+            const viewOverlay = document.getElementById('viewOverlay');
+            const btnNavPanel = document.getElementById('btnNavPanel');
+            const btnNavOverlay = document.getElementById('btnNavOverlay');
+
+            if (mode === 'overlay') {
+                // Modo Overlay Puro para OBS
+                navHeader.classList.add('hidden');
+                viewControl.classList.add('hidden');
+                viewOverlay.classList.remove('hidden');
+                
+                // Iniciar motor gráfico do espaço se ainda não ativo
+                initSpaceCanvas();
+                applyConfigToOverlay(currentConfig);
+            } else {
+                // Modo Painel de Controle
+                navHeader.classList.remove('hidden');
+                viewControl.classList.remove('hidden');
+                viewOverlay.classList.add('hidden');
+
+                btnNavPanel.className = "flex items-center space-x-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 bg-cyan-500 text-slate-950 shadow-md";
+                btnNavOverlay.className = "flex items-center space-x-2 px-4 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200";
+                
+                syncUIWithConfig();
+            }
+
+            if (updateHistory) {
+                try {
+                    const url = new URL(window.location.href);
+                    if (mode === 'overlay') {
+                        url.searchParams.set('mode', 'overlay');
+                    } else {
+                        url.searchParams.delete('mode');
+                    }
+                    window.history.replaceState({ path: url.href }, '', url.href);
+                } catch (e) {
+                    // Ignora erro de History API quando executado em ambiente Blob / iFrame restrito
+                    console.warn('History.replaceState não suportado no ambiente atual:', e);
+                }
+            }
+        }
+
+        /* ===================================================================
+           3. VINCULAÇÃO DE FORMULÁRIOS E UI DO PAINEL DE CONTROLE
+           =================================================================== */
+        
+        function syncUIWithConfig() {
+            document.getElementById('inputChannelName').value = currentConfig.channelName;
+            document.getElementById('inputChannelSub').value = currentConfig.channelSub;
+            document.getElementById('inputLiveBadgeText').value = currentConfig.liveBadgeText;
+            document.getElementById('inputLowerThird').value = currentConfig.lowerThirdText;
+            document.getElementById('inputMarqueeText').value = currentConfig.marqueeText;
+            document.getElementById('inputMarqueeSpeed').value = currentConfig.marqueeSpeed;
+            document.getElementById('labelMarqueeSpeed').innerText = `${currentConfig.marqueeSpeed}s`;
+            
+            document.getElementById('inputSpaceSpeed').value = currentConfig.spaceSpeed;
+            document.getElementById('labelSpaceSpeed').innerText = parseFloat(currentConfig.spaceSpeed).toFixed(1);
+            
+            document.getElementById('inputAccentColor').value = currentConfig.accentColor;
+            document.getElementById('labelAccentColor').innerText = currentConfig.accentColor;
+
+            document.getElementById('selectTimerInterval').value = currentConfig.timerInterval;
+            document.getElementById('inputLogoUrl').value = currentConfig.logoUrl || '';
+
+            // Logo preview
+            const logoImg = document.getElementById('logoPreviewImg');
+            const logoIcon = document.getElementById('logoFallbackIcon');
+            if (currentConfig.logoUrl) {
+                logoImg.src = currentConfig.logoUrl;
+                logoImg.classList.remove('hidden');
+                logoIcon.classList.add('hidden');
+            } else {
+                logoImg.classList.add('hidden');
+                logoIcon.classList.remove('hidden');
+            }
+
+            // CTAs
+            document.getElementById('checkCtaSubscribe').checked = currentConfig.ctas.subscribe.enabled;
+            document.getElementById('inputCtaSubscribeTitle').value = currentConfig.ctas.subscribe.title;
+            document.getElementById('inputCtaSubscribeSub').value = currentConfig.ctas.subscribe.sub;
+
+            document.getElementById('checkCtaBell').checked = currentConfig.ctas.bell.enabled;
+            document.getElementById('inputCtaBellTitle').value = currentConfig.ctas.bell.title;
+            document.getElementById('inputCtaBellSub').value = currentConfig.ctas.bell.sub;
+
+            document.getElementById('checkCtaComment').checked = currentConfig.ctas.comment.enabled;
+            document.getElementById('inputCtaCommentTitle').value = currentConfig.ctas.comment.title;
+            document.getElementById('inputCtaCommentSub').value = currentConfig.ctas.comment.sub;
+
+            document.getElementById('checkCtaLike').checked = currentConfig.ctas.like.enabled;
+            document.getElementById('inputCtaLikeTitle').value = currentConfig.ctas.like.title;
+            document.getElementById('inputCtaLikeSub').value = currentConfig.ctas.like.sub;
+        }
+
+        // Ler campos e atualizar o estado global
+        function updateConfig() {
+            currentConfig.channelName = document.getElementById('inputChannelName').value || 'MEU CANAL';
+            currentConfig.channelSub = document.getElementById('inputChannelSub').value || '';
+            currentConfig.liveBadgeText = document.getElementById('inputLiveBadgeText').value || 'AO VIVO';
+            currentConfig.lowerThirdText = document.getElementById('inputLowerThird').value || '';
+            currentConfig.marqueeText = document.getElementById('inputMarqueeText').value || '';
+            
+            currentConfig.marqueeSpeed = document.getElementById('inputMarqueeSpeed').value;
+            document.getElementById('labelMarqueeSpeed').innerText = `${currentConfig.marqueeSpeed}s`;
+
+            currentConfig.spaceSpeed = parseFloat(document.getElementById('inputSpaceSpeed').value);
+            document.getElementById('labelSpaceSpeed').innerText = currentConfig.spaceSpeed.toFixed(1);
+
+            currentConfig.accentColor = document.getElementById('inputAccentColor').value;
+            document.getElementById('labelAccentColor').innerText = currentConfig.accentColor;
+
+            currentConfig.timerInterval = parseInt(document.getElementById('selectTimerInterval').value);
+            currentConfig.logoUrl = document.getElementById('inputLogoUrl').value;
+
+            // Logo preview em tempo real no painel
+            const logoImg = document.getElementById('logoPreviewImg');
+            const logoIcon = document.getElementById('logoFallbackIcon');
+            if (currentConfig.logoUrl) {
+                logoImg.src = currentConfig.logoUrl;
+                logoImg.classList.remove('hidden');
+                logoIcon.classList.add('hidden');
+            } else {
+                logoImg.classList.add('hidden');
+                logoIcon.classList.remove('hidden');
+            }
+
+            // Ler CTAs
+            currentConfig.ctas.subscribe.enabled = document.getElementById('checkCtaSubscribe').checked;
+            currentConfig.ctas.subscribe.title = document.getElementById('inputCtaSubscribeTitle').value;
+            currentConfig.ctas.subscribe.sub = document.getElementById('inputCtaSubscribeSub').value;
+
+            currentConfig.ctas.bell.enabled = document.getElementById('checkCtaBell').checked;
+            currentConfig.ctas.bell.title = document.getElementById('inputCtaBellTitle').value;
+            currentConfig.ctas.bell.sub = document.getElementById('inputCtaBellSub').value;
+
+            currentConfig.ctas.comment.enabled = document.getElementById('checkCtaComment').checked;
+            currentConfig.ctas.comment.title = document.getElementById('inputCtaCommentTitle').value;
+            currentConfig.ctas.comment.sub = document.getElementById('inputCtaCommentSub').value;
+
+            currentConfig.ctas.like.enabled = document.getElementById('checkCtaLike').checked;
+            currentConfig.ctas.like.title = document.getElementById('inputCtaLikeTitle').value;
+            currentConfig.ctas.like.sub = document.getElementById('inputCtaLikeSub').value;
+
+            saveAndBroadcastConfig();
+        }
+
+        // Upload de Imagem de Logo Local
+        function handleLogoUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    document.getElementById('inputLogoUrl').value = e.target.result;
+                    updateConfig();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // Botão para disparar alertas imediatamente
+        function triggerNow() {
+            broadcastChannel.postMessage({ type: 'TRIGGER_ALERTS' });
+            showToast('Sequência de alertas disparada no Overlay!');
+        }
+
+        // Notificação estilo Toast
+        let toastTimeout;
+        function showToast(msg = 'Alterações sincronizadas!') {
+            const toast = document.getElementById('toastNotification');
+            document.getElementById('toastText').innerText = msg;
+            toast.classList.remove('hidden');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 2500);
+        }
+
+        // Helper para copiar URL limpa do OBS
+        function copyOverlayURL() {
+            let overlayUrl = window.location.href;
+            try {
+                const url = new URL(window.location.href);
+                url.searchParams.set('mode', 'overlay');
+                overlayUrl = url.href;
+            } catch (e) {
+                overlayUrl = window.location.origin + window.location.pathname + '?mode=overlay';
+            }
+            
+            // Suporte para iFrame / restrições de permissão
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(overlayUrl).then(() => {
+                    showToast('URL do Overlay copiada para a área de transferência!');
+                }).catch(() => {
+                    fallbackCopy(overlayUrl);
+                });
+            } else {
+                fallbackCopy(overlayUrl);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const input = document.createElement('input');
+            input.value = text;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            showToast('URL do Overlay copiada!');
+        }
+
+        /* ===================================================================
+           4. RENDERIZAÇÃO DO OVERLAY DA LIVE
+           =================================================================== */
+
+        function applyConfigToOverlay(cfg) {
+            if (currentMode !== 'overlay') return;
+
+            // Textos básicos
+            document.getElementById('overlayChannelName').innerText = cfg.channelName || 'MEU CANAL';
+            document.getElementById('overlayChannelSub').innerText = cfg.channelSub || '';
+            document.getElementById('overlayLiveBadge').innerText = cfg.liveBadgeText || 'AO VIVO';
+            document.getElementById('overlayLowerThird').innerText = cfg.lowerThirdText || '';
+
+            // Marquee
+            const marqueeEl = document.getElementById('overlayMarquee');
+            const marqueeTextFull = `${cfg.marqueeText} &nbsp;&nbsp;&nbsp;&nbsp;★&nbsp;&nbsp;&nbsp;&nbsp; ${cfg.marqueeText}`;
+            marqueeEl.innerHTML = marqueeTextFull;
+            marqueeEl.style.animationDuration = `${cfg.marqueeSpeed || 22}s`;
+
+            // Logo Image
+            const overlayImg = document.getElementById('overlayLogoImg');
+            const overlayIcon = document.getElementById('overlayLogoIcon');
+            if (cfg.logoUrl) {
+                overlayImg.src = cfg.logoUrl;
+                overlayImg.classList.remove('hidden');
+                overlayIcon.classList.add('hidden');
+            } else {
+                overlayImg.classList.add('hidden');
+                overlayIcon.classList.remove('hidden');
+            }
+
+            // CTAs Textos
+            document.getElementById('overlayCtaSubscribeTitle').innerText = cfg.ctas.subscribe.title;
+            document.getElementById('overlayCtaSubscribeSub').innerText = cfg.ctas.subscribe.sub;
+
+            document.getElementById('overlayCtaBellTitle').innerText = cfg.ctas.bell.title;
+            document.getElementById('overlayCtaBellSub').innerText = cfg.ctas.bell.sub;
+
+            document.getElementById('overlayCtaCommentTitle').innerText = cfg.ctas.comment.title;
+            document.getElementById('overlayCtaCommentSub').innerText = cfg.ctas.comment.sub;
+
+            document.getElementById('overlayCtaLikeTitle').innerText = cfg.ctas.like.title;
+            document.getElementById('overlayCtaLikeSub').innerText = cfg.ctas.like.sub;
+
+            // Atualizar velocidade das estrelas
+            speed = cfg.spaceSpeed || 2.5;
+
+            // Reiniciar timer automático de alertas
+            restartOverlayTimer(cfg.timerInterval);
+        }
+
+        /* ===================================================================
+           5. CANVAS DE ESPAÇO SIDERAL 3D (STARFIELD WARP SPEED)
+           =================================================================== */
+        let canvas, ctx;
+        let stars = [];
+        let numStars = 650;
+        let speed = 2.5;
+        let animFrameId = null;
+
+        function initSpaceCanvas() {
+            canvas = document.getElementById('spaceCanvas');
+            if (!canvas) return;
+            ctx = canvas.getContext('2d');
+
+            function resizeCanvas() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
+
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+
+            // Gerar estrelas
+            stars = [];
+            for (let i = 0; i < numStars; i++) {
+                stars.push(new Star(canvas.width, canvas.height));
+            }
+
+            if (!animFrameId) {
+                animateSpace();
+            }
+        }
+
+        class Star {
+            constructor(w, h) {
+                this.reset(w, h, true);
+            }
+
+            reset(w, h, initial = false) {
+                this.x = (Math.random() - 0.5) * w * 2;
+                this.y = (Math.random() - 0.5) * h * 2;
+                this.z = initial ? Math.random() * w : w;
+                this.pz = this.z;
+                
+                const colors = ['#ffffff', '#00f0ff', '#a5f3fc', '#cbd5e1'];
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+                this.size = Math.random() * 1.5 + 0.5;
+            }
+
+            update(w, h) {
+                this.pz = this.z;
+                this.z -= speed * 4;
+
+                if (this.z <= 0) {
+                    this.reset(w, h, false);
+                }
+            }
+
+            draw(w, h) {
+                const k = 256 / this.z;
+                const px = this.x * k + w / 2;
+                const py = this.y * k + h / 2;
+
+                const pk = 256 / this.pz;
+                const ppx = this.x * pk + w / 2;
+                const ppy = this.y * pk + h / 2;
+
+                if (px >= 0 && px <= w && py >= 0 && py <= h) {
+                    const size = Math.max(0.1, (1 - this.z / w) * this.size * 2.2);
+                    const alpha = Math.min(1, (1 - this.z / w) * 1.2);
+
+                    ctx.beginPath();
+                    ctx.moveTo(ppx, ppy);
+                    ctx.lineTo(px, py);
+                    ctx.strokeStyle = this.color;
+                    ctx.globalAlpha = alpha;
+                    ctx.lineWidth = size;
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.arc(px, py, size * 0.7, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fill();
+                }
+            }
+        }
+
+        function animateSpace() {
+            if (currentMode === 'overlay') {
+                const w = canvas.width;
+                const h = canvas.height;
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+                ctx.fillRect(0, 0, w, h);
+
+                for (let star of stars) {
+                    star.update(w, h);
+                    star.draw(w, h);
+                }
+            }
+            animFrameId = requestAnimationFrame(animateSpace);
+        }
+
+        /* ===================================================================
+           6. CICLO AUTOMÁTICO DE ALERTAS POPUPS (CTAS)
+           =================================================================== */
+        let autoAlertInterval = null;
+        let isSequenceRunning = false;
+
+        function showSingleCard(cardId, duration = 4500) {
+            return new Promise((resolve) => {
+                const card = document.getElementById(cardId);
+                if (!card) return resolve();
+
+                card.classList.add('active');
+
+                setTimeout(() => {
+                    card.classList.remove('active');
+                    setTimeout(resolve, 600); // tempo de animação de saída
+                }, duration);
+            });
+        }
+
+        async function triggerCtaSequence() {
+            if (isSequenceRunning || currentMode !== 'overlay') return;
+            isSequenceRunning = true;
+
+            const ctas = currentConfig.ctas;
+            const sequence = [
+                { id: 'card-subscribe', enabled: ctas.subscribe.enabled },
+                { id: 'card-bell', enabled: ctas.bell.enabled },
+                { id: 'card-comment', enabled: ctas.comment.enabled },
+                { id: 'card-like', enabled: ctas.like.enabled }
+            ];
+
+            for (let item of sequence) {
+                if (item.enabled) {
+                    await showSingleCard(item.id, 4500);
+                    await new Promise(r => setTimeout(r, 700));
+                }
+            }
+
+            isSequenceRunning = false;
+        }
+
+        function restartOverlayTimer(ms) {
+            if (autoAlertInterval) clearInterval(autoAlertInterval);
+            if (!ms || ms <= 0) return;
+
+            autoAlertInterval = setInterval(() => {
+                triggerCtaSequence();
+            }, ms);
+        }
+
+        /* ===================================================================
+           7. LISTENER DE MENSAGENS DO BROADCASTCHANNEL & EVENTOS
+           =================================================================== */
+        broadcastChannel.onmessage = (event) => {
+            const data = event.data;
+            if (!data) return;
+
+            if (data.type === 'UPDATE_CONFIG') {
+                currentConfig = data.config;
+                if (currentMode === 'overlay') {
+                    applyConfigToOverlay(currentConfig);
+                } else {
+                    // Atualizar o iframe de preview se estivemos no painel
+                    const previewIframe = document.getElementById('previewIframe');
+                    if (previewIframe && previewIframe.contentWindow) {
+                        previewIframe.contentWindow.postMessage({ type: 'UPDATE_CONFIG', config: currentConfig }, '*');
+                    }
+                }
+            } else if (data.type === 'TRIGGER_ALERTS') {
+                if (currentMode === 'overlay') {
+                    triggerCtaSequence();
+                } else {
+                    const previewIframe = document.getElementById('previewIframe');
+                    if (previewIframe && previewIframe.contentWindow) {
+                        previewIframe.contentWindow.postMessage({ type: 'TRIGGER_ALERTS' }, '*');
+                    }
+                }
+            }
+        };
+
+        // Escutar mensagens diretas via postMessage (para comunicação do iframe de preview)
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'UPDATE_CONFIG') {
+                currentConfig = event.data.config;
+                if (currentMode === 'overlay') {
+                    applyConfigToOverlay(currentConfig);
+                }
+            } else if (event.data && event.data.type === 'TRIGGER_ALERTS') {
+                if (currentMode === 'overlay') {
+                    triggerCtaSequence();
+                }
+            }
+        });
+
+        /* ===================================================================
+           8. INICIALIZAÇÃO GERAL DA APLICAÇÃO
+           =================================================================== */
+        window.onload = function() {
+            loadStoredConfig();
+            initModeFromURL();
+
+            // Se for o modo overlay de primeira entrada, disparar demonstração inicial após 2.5s
+            if (currentMode === 'overlay') {
+                setTimeout(() => {
+                    triggerCtaSequence();
+                }, 2500);
+            }
+        };
+    </script>
+</body>
+</html>
