@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Futuristic Broadcast Overlay & Live Studio Hub</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,600;0,800;0,900;1,400&family=Orbitron:wght@400;600;700;900&display=swap">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        orbitron: ['Orbitron', 'sans-serif'],
+                        sans: ['Montserrat', 'sans-serif'],
+                    },
+                    colors: {
+                        hud: {
+                            cyan: '#00f0ff',
+                            magenta: '#ff0055',
+                            gold: '#ffb703',
+                            dark: '#030712'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* ESTILOS FUTURISTAS & EFECTS NEON HUD */
+        :root {
+            --hud-color: #00f0ff;
+            --hud-glow: rgba(0, 240, 255, 0.4);
+            --hud-bg-glow: rgba(0, 240, 255, 0.12);
+        }
+
+        .hud-border {
+            border-color: var(--hud-color);
+            box-shadow: 0 0 15px var(--hud-glow), inset 0 0 10px var(--hud-bg-glow);
+        }
+
+        .hud-text-glow {
+            text-shadow: 0 0 8px var(--hud-color), 0 0 20px var(--hud-glow);
+        }
+
+        .hud-glass {
+            background: linear-gradient(135deg, rgba(3, 7, 18, 0.88) 0%, rgba(15, 23, 42, 0.75) 100%);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        /* ANIMAÇÃO DE PULSO DA CAMERA E LIVE BADGE */
+        @keyframes hudScanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(1000%); }
+        }
+
+        .scanline {
+            animation: hudScanline 8s linear infinite;
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.96); }
+        }
+
+        .live-dot-pulse {
+            animation: pulseGlow 1.8s infinite ease-in-out;
+        }
+
+        /* MARQUEE TEXTO CONTINUO */
+        .marquee-container {
+            width: 100%;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .marquee-content {
+            display: inline-block;
+            animation: marqueeScroll linear infinite;
+        }
+
+        @keyframes marqueeScroll {
+            0% { transform: translateX(100vw); }
+            100% { transform: translateX(-100%); }
+        }
+
+        /* CANTO FUTURISTA (HUD CORNERS) */
+        .hud-corner {
+            position: relative;
+        }
+        .hud-corner::before, .hud-corner::after {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-color: var(--hud-color);
+            border-style: solid;
+            pointer-events: none;
+        }
+        .hud-corner::before {
+            top: -2px; left: -2px;
+            border-width: 2px 0 0 2px;
+        }
+        .hud-corner::after {
+            bottom: -2px; right: -2px;
+            border-width: 0 2px 2px 0;
+        }
+
+        /* CUSTOM SCROLLBAR */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(3, 7, 18, 0.8);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--hud-color);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans text-slate-100 antialiased selection:bg-cyan-500 selection:text-slate-950">
+
+    <!-- BARRA NAVEGAÇÃO SUPERIOR -->
+    <header id="topNav" class="bg-slate-900/90 border-b border-cyan-500/30 sticky top-0 z-50 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+            
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-slate-950 border border-cyan-400 flex items-center justify-center text-cyan-400 shadow-[0_0_12px_rgba(0,240,255,0.3)]">
+                    <i class="fa-solid fa-video text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-orbitron font-bold text-sm sm:text-base text-cyan-400 tracking-wider flex items-center gap-2">
+                        STUDIO OVERLAY HUD <span class="bg-cyan-950 text-cyan-300 border border-cyan-500/40 text-[10px] px-2 py-0.5 rounded-full font-mono">v3.0</span>
+                    </h1>
+                    <p class="text-[11px] text-slate-400">Overlay de Transmissão Futurista com Transmissão Webcam</p>
+                </div>
+            </div>
+
+            <!-- NAVEGAÇÃO DE PÁGINAS -->
+            <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+                <button id="btnNavControl" onclick="switchMode('control')" class="flex items-center space-x-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 bg-cyan-500 text-slate-950 shadow-md">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Painel Admin</span>
+                </button>
+                <button id="btnNavOverlay" onclick="switchMode('overlay')" class="flex items-center space-x-2 px-4 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200">
+                    <i class="fa-solid fa-display"></i>
+                    <span>Ver Overlay (OBS)</span>
+                </button>
+            </div>
+
+            <!-- AÇÕES RÁPIDAS / LINK OBS -->
+            <div class="hidden md:flex items-center space-x-2">
+                <button onclick="copyOBSUrl()" class="bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 px-3.5 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-2 shadow-md">
+                    <i class="fa-solid fa-link"></i>
+                    <span>Copiar URL para o OBS</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="flex-1 relative w-full h-full overflow-hidden">
+
+        <!-- ================================================================= -->
+        <!-- MODO 1: PAINEL ADMIN (CONFIGURAÇÕES E CONTROLE)                   -->
+        <!-- ================================================================= -->
+        <section id="viewControl" class="w-full h-full p-4 sm:p-6 overflow-y-auto max-w-7xl mx-auto space-y-6">
+
+            <!-- TOAST BANNER NOTIFICAÇÃO -->
+            <div id="toast" class="hidden fixed bottom-6 right-6 z-50 bg-slate-900 border border-cyan-400 text-cyan-300 px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3">
+                <i class="fa-solid fa-circle-check text-cyan-400 text-lg"></i>
+                <span id="toastMsg" class="text-xs font-semibold">Configurações atualizadas!</span>
+            </div>
+
+            <!-- GRID PRINCIPAL PAINEL ADMIN -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- WEBCAM & GERENCIAMENTO DE VÍDEO -->
+                <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-camera text-cyan-400"></i>
+                            <h2 class="font-orbitron font-bold text-sm text-cyan-400 uppercase">Câmera / Webcam</h2>
+                        </div>
+                        <span id="camStatus" class="bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Inativa</span>
+                    </div>
+
+                    <!-- Seletor de Câmeras -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-semibold text-slate-300">Selecione a Câmera de Entrada:</label>
+                        <select id="selectCamera" onchange="startWebcam(this.value)" class="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg p-2.5 outline-none focus:border-cyan-400">
+                            <option value="">Carregando dispositivos...</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-2">
+                        <button onclick="toggleCameraState()" id="btnToggleCam" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-power-off"></i>
+                            <span>Ativar Webcam no Fundo</span>
+                        </button>
+                    </div>
+
+                    <p class="text-[11px] text-slate-400 leading-relaxed pt-1">
+                        <b>Dica OBS Studio:</b> Ao usar em uma Fonte de Navegador (Browser Source) no OBS, certifique-se de autorizar a câmera nas permissões do navegador se for usá-la diretamente no HTML.
+                    </p>
+                </div>
+
+                <!-- MINI PREVIEW AO VIVO -->
+                <div class="lg:col-span-2 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col space-y-3">
+                    <div class="flex justify-between items-center px-1">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-eye text-cyan-400 text-xs"></i>
+                            <h2 class="font-orbitron font-bold text-xs text-slate-300 uppercase">Preview do Overlay em Tempo Real</h2>
+                        </div>
+                        <span class="text-[10px] text-slate-400 font-mono">1920x1080 (Proporção Proporcional)</span>
+                    </div>
+
+                    <div class="relative w-full aspect-video bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner group">
+                        <iframe id="previewIframe" src="?mode=overlay" class="w-full h-full border-0 pointer-events-none"></iframe>
+                        <div class="absolute inset-0 border border-cyan-500/20 rounded-xl pointer-events-none"></div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- EDITOR DE CORES FUTURISTAS & LAYOUT -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                <!-- CORES & IDENTIDADE VISUAL FUTURISTA -->
+                <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+                    <div class="flex items-center space-x-3 border-b border-slate-800 pb-3">
+                        <div class="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                            <i class="fa-solid fa-palette"></i>
+                        </div>
+                        <h2 class="font-orbitron font-bold text-sm text-cyan-400 uppercase">Cores & Estilo Neon HUD</h2>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <!-- Cor Primária Neon -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Cor Primária (Glow / BORDAS)</label>
+                            <div class="flex items-center space-x-3">
+                                <input type="color" id="inputPrimaryColor" value="#00f0ff" onchange="updateAdminConfig()" class="w-10 h-10 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer p-0.5">
+                                <span id="labelPrimaryColor" class="text-xs font-mono text-cyan-400 font-bold uppercase">#00f0ff</span>
+                            </div>
+                        </div>
+
+                        <!-- Cor de Destaque / Alertas -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Cor Secundária (Badge / Destaque)</label>
+                            <div class="flex items-center space-x-3">
+                                <input type="color" id="inputSecondaryColor" value="#ff0055" onchange="updateAdminConfig()" class="w-10 h-10 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer p-0.5">
+                                <span id="labelSecondaryColor" class="text-xs font-mono text-red-400 font-bold uppercase">#ff0055</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Botões de Temas Pró-Definidos -->
+                    <div class="pt-2">
+                        <label class="block text-xs font-semibold text-slate-300 mb-2">Presers de Estilos Cyberpunk:</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="applyPreset('#00f0ff', '#ff0055')" class="bg-slate-950 border border-cyan-500/40 text-cyan-400 py-1.5 px-2 rounded-lg text-[11px] font-bold hover:bg-cyan-950">
+                                Cyan Cyber
+                            </button>
+                            <button onclick="applyPreset('#ff0055', '#ffb703')" class="bg-slate-950 border border-pink-500/40 text-pink-400 py-1.5 px-2 rounded-lg text-[11px] font-bold hover:bg-pink-950">
+                                Neon Red/Gold
+                            </button>
+                            <button onclick="applyPreset('#10b981', '#00f0ff')" class="bg-slate-950 border border-emerald-500/40 text-emerald-400 py-1.5 px-2 rounded-lg text-[11px] font-bold hover:bg-emerald-950">
+                                Matrix Emerald
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- IDENTIDADE DO PROGRAMA & APRESENTADOR -->
+                <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+                    <div class="flex items-center space-x-3 border-b border-slate-800 pb-3">
+                        <div class="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                            <i class="fa-solid fa-tv"></i>
+                        </div>
+                        <h2 class="font-orbitron font-bold text-sm text-cyan-400 uppercase">Cabeçalho do Programa</h2>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Nome do Programa</label>
+                            <input type="text" id="inputShowTitle" oninput="updateAdminConfig()" value="PROGRAMA PODCAST PRO" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white font-bold focus:border-cyan-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Apresentador / Subtítulo</label>
+                            <input type="text" id="inputPresenter" oninput="updateAdminConfig()" value="APRESENTADO POR ALEX SILVA" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-300 focus:border-cyan-400 outline-none">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Texto da Badge 'AO VIVO'</label>
+                        <input type="text" id="inputLiveBadge" oninput="updateAdminConfig()" value="AO VIVO • EDICAO #104" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-red-400 font-bold focus:border-cyan-400 outline-none uppercase">
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- EDITOR DE BANNERS (LOWER THIRD) & RODAPÉ ROTATIVO -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+                <div class="flex items-center space-x-3 border-b border-slate-800 pb-3">
+                    <div class="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                        <i class="fa-solid fa-scroll"></i>
+                    </div>
+                    <h2 class="font-orbitron font-bold text-sm text-cyan-400 uppercase">Banner de Notícia / Legenda (Lower Third)</h2>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <!-- Título do Lower Third -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Título / Chapéu da Notícia (Destaque Topo)</label>
+                        <input type="text" id="inputLowerTitle" oninput="updateAdminConfig()" value="DEBATE EXCLUSIVO DA SEMANA" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-amber-400 font-bold focus:border-cyan-400 outline-none">
+                    </div>
+
+                    <!-- Descrição da Notícia -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Conteúdo Principal da Legenda (Lower Third)</label>
+                        <input type="text" id="inputLowerSub" oninput="updateAdminConfig()" value="Novas tecnologias no mercado de inteligência artificial e transmissões ao vivo." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-cyan-400 outline-none">
+                    </div>
+                </div>
+
+                <!-- Texto Marquee Infinito -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Letreiro Rotativo Infinito (Barra Inferior)</label>
+                    <input type="text" id="inputTickerText" oninput="updateAdminConfig()" value="Inscreva-se no nosso canal oficial • Ative o sininho de notificações • Envie suas perguntas no chat em tempo real" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-cyan-400 outline-none">
+                </div>
+
+                <!-- Velocidade Marquee -->
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-xs font-semibold text-slate-300">Velocidade do Letreiro Rotativo</label>
+                        <span id="labelTickerSpeed" class="text-xs font-mono text-cyan-400 font-bold">20s</span>
+                    </div>
+                    <input type="range" id="inputTickerSpeed" min="8" max="40" step="1" value="20" oninput="updateAdminConfig()" class="w-full accent-cyan-400 cursor-pointer">
+                </div>
+            </div>
+
+        </section>
+
+
+        <!-- ================================================================= -->
+        <!-- MODO 2: VISUALIZAÇÃO DO OVERLAY FULLSCREEN (OBS STREAM SOURCE)    -->
+        <!-- ================================================================= -->
+        <section id="viewOverlay" class="hidden absolute inset-0 w-full h-full overflow-hidden bg-black select-none">
+            
+            <!-- WEBCAM / VÍDEO DO DE FUNDO -->
+            <video id="webcamVideo" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover z-0"></video>
+            
+            <!-- MASCARA HUD FUTURISTA / EFEITOS VISUAIS -->
+            <div id="hudOverlayMask" class="absolute inset-0 z-10 pointer-events-none bg-gradient-to-t from-black/80 via-transparent to-black/60">
+                <!-- Linha Scanline Animada -->
+                <div class="scanline w-full h-1 bg-cyan-400/20 shadow-[0_0_15px_#00f0ff]"></div>
+            </div>
+
+            <!-- LAYOUT OVERLAY HUD ELEMENTS (Z-INDEX 20) -->
+            <div class="relative z-20 w-full h-full flex flex-col justify-between p-8 pointer-events-none">
+                
+                <!-- TOP HEADER BAR (PROGRAMA & BADGE AO VIVO) -->
+                <div class="flex justify-between items-start w-full">
+                    
+                    <!-- BOX NOME DO PROGRAMA -->
+                    <div id="boxShowTitle" class="hud-glass hud-border hud-corner p-4 rounded-xl max-w-md transition-all">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-2 h-8 bg-cyan-400 rounded-full" id="titleBarAccent"></div>
+                            <div>
+                                <h1 id="overlayShowTitle" class="hud-text-glow font-orbitron font-extrabold text-xl sm:text-2xl tracking-wider text-cyan-400 uppercase">
+                                    PROGRAMA PODCAST PRO
+                                </h1>
+                                <p id="overlayPresenter" class="text-xs font-semibold text-slate-300 tracking-widest uppercase">
+                                    APRESENTADO POR ALEX SILVA
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BADGE AO VIVO / STATUS -->
+                    <div id="boxLiveBadge" class="hud-glass hud-corner px-5 py-2.5 rounded-full border border-red-500/60 flex items-center space-x-3 shadow-[0_0_15px_rgba(255,0,85,0.4)]">
+                        <span class="w-3 h-3 rounded-full bg-red-600 live-dot-pulse shadow-[0_0_8px_#ff0055]"></span>
+                        <span id="overlayLiveBadge" class="font-orbitron font-extrabold text-sm tracking-widest text-red-400 uppercase">
+                            AO VIVO • EDICAO #104
+                        </span>
+                    </div>
+
+                </div>
+
+                <!-- BOTTOM LOWER THIRD (LEGENDA DO PROGRAMA & MARQUEE) -->
+                <div class="w-full flex flex-col space-y-3 -mx-8 -mb-8 pointer-events-auto">
+                    
+                    <!-- LOWER THIRD BANNER -->
+                    <div class="self-start ml-8 hud-glass hud-border hud-corner p-4 rounded-t-xl max-w-2xl transition-all shadow-2xl">
+                        <div class="flex items-center space-x-2 mb-1">
+                            <i class="fa-solid fa-bullhorn text-amber-400 text-xs animate-pulse"></i>
+                            <span id="overlayLowerTitle" class="font-orbitron font-extrabold text-xs tracking-wider text-amber-400 uppercase">
+                                DEBATE EXCLUSIVO DA SEMANA
+                            </span>
+                        </div>
+                        <p id="overlayLowerSub" class="text-sm font-semibold text-slate-100 leading-snug">
+                            Novas tecnologias no mercado de inteligência artificial e transmissões ao vivo.
+                        </p>
+                    </div>
+
+                    <!-- BARRA CONTINUA DE NOTÍCIAS (MARQUEE) -->
+                    <div class="w-screen bg-slate-950/90 border-t-2 border-cyan-500 py-2.5 overflow-hidden shadow-[0_-10px_25px_rgba(0,0,0,0.9)]" id="boxTickerBar">
+                        <div class="marquee-container">
+                            <div id="overlayTickerText" class="marquee-content font-orbitron font-bold text-sm text-cyan-300 tracking-wider">
+                                Inscreva-se no nosso canal oficial • Ative o sininho de notificações • Envie suas perguntas no chat em tempo real
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- LOGICA SCRIPT & SINCRONIZAÇÃO EM TEMPO REAL -->
+    <script>
+        /* ===================================================================
+           1. ESTADO GLOBAL & BROADCAST CHANNEL API (SYNC OBS STUDIO)
+           =================================================================== */
+        const SYNC_CHANNEL_NAME = 'obs_futuristic_overlay_sync';
+        const broadcastChannel = new BroadcastChannel(SYNC_CHANNEL_NAME);
+
+        const defaultConfig = {
+            primaryColor: '#00f0ff',
+            secondaryColor: '#ff0055',
+            showTitle: 'PROGRAMA PODCAST PRO',
+            presenter: 'APRESENTADO POR ALEX SILVA',
+            liveBadge: 'AO VIVO • EDICAO #104',
+            lowerTitle: 'DEBATE EXCLUSIVO DA SEMANA',
+            lowerSub: 'Novas tecnologias no mercado de inteligência artificial e transmissões ao vivo.',
+            tickerText: 'Inscreva-se no nosso canal oficial • Ative o sininho de notificações • Envie suas perguntas no chat em tempo real',
+            tickerSpeed: 20
+        };
+
+        let currentConfig = { ...defaultConfig };
+
+        function loadConfig() {
+            try {
+                const saved = localStorage.getItem('obs_futuristic_overlay_config');
+                if (saved) {
+                    currentConfig = JSON.parse(saved);
+                }
+            } catch (e) {
+                console.error('Erro ao ler do localStorage', e);
+            }
+        }
+
+        function saveAndBroadcast() {
+            try {
+                localStorage.setItem('obs_futuristic_overlay_config', JSON.stringify(currentConfig));
+            } catch (e) {
+                console.error('Erro ao salvar no localStorage', e);
+            }
+            broadcastChannel.postMessage({ type: 'UPDATE_CONFIG', config: currentConfig });
+            showToast();
+        }
+
+        /* ===================================================================
+           2. GERENCIAMENTO DE CÂMERA / WEBCAM
+           =================================================================== */
+        let activeStream = null;
+
+        async function initCameraDevices() {
+            const selectCam = document.getElementById('selectCamera');
+            selectCam.innerHTML = '';
+
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+
+                if (videoDevices.length === 0) {
+                    selectCam.innerHTML = '<option value="">Nenhuma câmera detectada</option>';
+                    return;
+                }
+
+                videoDevices.forEach((device, index) => {
+                    const opt = document.createElement('option');
+                    opt.value = device.deviceId;
+                    opt.innerText = device.label || `Câmera ${index + 1}`;
+                    selectCam.appendChild(opt);
+                });
+            } catch (err) {
+                console.error('Erro ao listar câmeras:', err);
+                selectCam.innerHTML = '<option value="">Erro ao carregar permissões de vídeo</option>';
+            }
+        }
+
+        async function startWebcam(deviceId = null) {
+            const videoEl = document.getElementById('webcamVideo');
+            const camStatus = document.getElementById('camStatus');
+
+            if (activeStream) {
+                activeStream.getTracks().forEach(track => track.stop());
+            }
+
+            const constraints = {
+                video: deviceId ? { deviceId: { exact: deviceId } } : true,
+                audio: false
+            };
+
+            try {
+                activeStream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoEl.srcObject = activeStream;
+                camStatus.innerText = "Webcam Ativa";
+                camStatus.className = "bg-emerald-950 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase";
+                document.getElementById('btnToggleCam').innerHTML = `<i class="fa-solid fa-power-off"></i> Desativar Câmera`;
+                document.getElementById('btnToggleCam').className = "w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2";
+            } catch (err) {
+                console.error("Erro ao iniciar webcam:", err);
+                camStatus.innerText = "Erro ao Acessar";
+                camStatus.className = "bg-red-950 text-red-400 border border-red-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase";
+            }
+        }
+
+        function toggleCameraState() {
+            if (activeStream && activeStream.active) {
+                activeStream.getTracks().forEach(track => track.stop());
+                activeStream = null;
+                document.getElementById('webcamVideo').srcObject = null;
+                document.getElementById('camStatus').innerText = "Inativa";
+                document.getElementById('camStatus').className = "bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase";
+                document.getElementById('btnToggleCam').innerHTML = `<i class="fa-solid fa-power-off"></i> Ativar Webcam no Fundo`;
+                document.getElementById('btnToggleCam').className = "w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2";
+            } else {
+                const selectedCam = document.getElementById('selectCamera').value;
+                startWebcam(selectedCam);
+            }
+        }
+
+        /* ===================================================================
+           3. TROCA DE MODOS (ADMIN vs OVERLAY)
+           =================================================================== */
+        let currentMode = 'control';
+
+        function initModeFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('mode') === 'overlay') {
+                switchMode('overlay', false);
+            } else {
+                switchMode('control', false);
+            }
+        }
+
+        function switchMode(mode, updateHistory = true) {
+            currentMode = mode;
+            const nav = document.getElementById('topNav');
+            const viewControl = document.getElementById('viewControl');
+            const viewOverlay = document.getElementById('viewOverlay');
+
+            if (mode === 'overlay') {
+                nav.classList.add('hidden');
+                viewControl.classList.add('hidden');
+                viewOverlay.classList.remove('hidden');
+                applyConfigToOverlay(currentConfig);
+            } else {
+                nav.classList.remove('hidden');
+                viewControl.classList.remove('hidden');
+                viewOverlay.classList.add('hidden');
+                syncFormWithConfig();
+            }
+
+            if (updateHistory) {
+                try {
+                    const url = new URL(window.location.href);
+                    if (mode === 'overlay') url.searchParams.set('mode', 'overlay');
+                    else url.searchParams.delete('mode');
+                    window.history.replaceState({}, '', url.href);
+                } catch (e) {
+                    console.warn("History state error", e);
+                }
+            }
+        }
+
+        /* ===================================================================
+           4. SINCRONIZAÇÃO DE FORMULÁRIO E EDITIONS DE CORES
+           =================================================================== */
+        function syncFormWithConfig() {
+            document.getElementById('inputPrimaryColor').value = currentConfig.primaryColor;
+            document.getElementById('labelPrimaryColor').innerText = currentConfig.primaryColor;
+
+            document.getElementById('inputSecondaryColor').value = currentConfig.secondaryColor;
+            document.getElementById('labelSecondaryColor').innerText = currentConfig.secondaryColor;
+
+            document.getElementById('inputShowTitle').value = currentConfig.showTitle;
+            document.getElementById('inputPresenter').value = currentConfig.presenter;
+            document.getElementById('inputLiveBadge').value = currentConfig.liveBadge;
+
+            document.getElementById('inputLowerTitle').value = currentConfig.lowerTitle;
+            document.getElementById('inputLowerSub').value = currentConfig.lowerSub;
+
+            document.getElementById('inputTickerText').value = currentConfig.tickerText;
+            document.getElementById('inputTickerSpeed').value = currentConfig.tickerSpeed;
+            document.getElementById('labelTickerSpeed').innerText = `${currentConfig.tickerSpeed}s`;
+        }
+
+        function updateAdminConfig() {
+            currentConfig.primaryColor = document.getElementById('inputPrimaryColor').value;
+            document.getElementById('labelPrimaryColor').innerText = currentConfig.primaryColor;
+
+            currentConfig.secondaryColor = document.getElementById('inputSecondaryColor').value;
+            document.getElementById('labelSecondaryColor').innerText = currentConfig.secondaryColor;
+
+            currentConfig.showTitle = document.getElementById('inputShowTitle').value || 'TITULO';
+            currentConfig.presenter = document.getElementById('inputPresenter').value || '';
+            currentConfig.liveBadge = document.getElementById('inputLiveBadge').value || 'AO VIVO';
+
+            currentConfig.lowerTitle = document.getElementById('inputLowerTitle').value || '';
+            currentConfig.lowerSub = document.getElementById('inputLowerSub').value || '';
+
+            currentConfig.tickerText = document.getElementById('inputTickerText').value || '';
+            currentConfig.tickerSpeed = document.getElementById('inputTickerSpeed').value;
+            document.getElementById('labelTickerSpeed').innerText = `${currentConfig.tickerSpeed}s`;
+
+            saveAndBroadcast();
+        }
+
+        function applyPreset(primary, secondary) {
+            document.getElementById('inputPrimaryColor').value = primary;
+            document.getElementById('inputSecondaryColor').value = secondary;
+            updateAdminConfig();
+        }
+
+        function showToast(msg = 'Configurações sincronizadas!') {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 2000);
+        }
+
+        function copyOBSUrl() {
+            let overlayUrl = window.location.href;
+            try {
+                const url = new URL(window.location.href);
+                url.searchParams.set('mode', 'overlay');
+                overlayUrl = url.href;
+            } catch (e) {
+                overlayUrl = window.location.origin + window.location.pathname + '?mode=overlay';
+            }
+
+            const el = document.createElement('textarea');
+            el.value = overlayUrl;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            showToast('URL copiada para a área de transferência!');
+        }
+
+        /* ===================================================================
+           5. APLICAÇÃO DE ESTILOS E TEXTOS NO OVERLAY
+           =================================================================== */
+        function applyConfigToOverlay(cfg) {
+            if (currentMode !== 'overlay') return;
+
+            // Atualização de Variáveis CSS de Cores Neon HUD
+            document.documentElement.style.setProperty('--hud-color', cfg.primaryColor);
+            
+            // Textos
+            document.getElementById('overlayShowTitle').innerText = cfg.showTitle;
+            document.getElementById('overlayPresenter').innerText = cfg.presenter;
+            document.getElementById('overlayLiveBadge').innerText = cfg.liveBadge;
+
+            document.getElementById('overlayLowerTitle').innerText = cfg.lowerTitle;
+            document.getElementById('overlayLowerSub').innerText = cfg.lowerSub;
+
+            // Marquee
+            const tickerEl = document.getElementById('overlayTickerText');
+            tickerEl.innerText = cfg.tickerText;
+            tickerEl.style.animationDuration = `${cfg.tickerSpeed}s`;
+
+            // Borda do Ticker
+            document.getElementById('boxTickerBar').style.borderColor = cfg.primaryColor;
+            document.getElementById('titleBarAccent').style.backgroundColor = cfg.primaryColor;
+        }
+
+        /* ===================================================================
+           6. ESCUTAR MENSAGENS EM TEMPO REAL DA BROADCAST API
+           =================================================================== */
+        broadcastChannel.onmessage = (event) => {
+            if (event.data && event.data.type === 'UPDATE_CONFIG') {
+                currentConfig = event.data.config;
+                if (currentMode === 'overlay') {
+                    applyConfigToOverlay(currentConfig);
+                } else {
+                    const iframe = document.getElementById('previewIframe');
+                    if (iframe && iframe.contentWindow) {
+                        iframe.contentWindow.postMessage({ type: 'UPDATE_CONFIG', config: currentConfig }, '*');
+                    }
+                }
+            }
+        };
+
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'UPDATE_CONFIG') {
+                currentConfig = event.data.config;
+                if (currentMode === 'overlay') {
+                    applyConfigToOverlay(currentConfig);
+                }
+            }
+        });
+
+        /* ===================================================================
+           7. INICIALIZAÇÃO DA APLICAÇÃO
+           =================================================================== */
+        window.onload = function() {
+            loadConfig();
+            initCameraDevices();
+            initModeFromURL();
+        };
+    </script>
+</body>
+</html>
